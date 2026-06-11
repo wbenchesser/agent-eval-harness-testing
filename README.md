@@ -14,3 +14,10 @@ Compliation of information for testing the [opendatahub-io evaluation framework 
         * Provides multiple fully runnable open source web application that contains thousands of exploitable test cases, each mapped to specific CWEs.
         * Open source.
         * Cloneable from [GitHub](https://github.com/OWASP-Benchmark).
+
+## Concepts
+* In an evaluation setup, the common weakness databases (i.e. OWASP Benchmark) is the vulnerable code, and the agent-eval-harness is the testing arena. However, the harness itself doesn't actively "test exploits."
+    * Instead, the AI Agent you are developing is the subject under evaluation.
+* The common weakness database provides the context.
+* The AI Agent reads the code, attempts to analyze it, and outputs a response (e.g., "This file has a path traversal vulnerability").
+* The agent-eval-harness manages this lifecycle. It feeds the code to your agent, captures the agent's behavior/answers, and automatically scores whether the agent correctly identified the exploit as unsafe.
