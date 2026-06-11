@@ -26,4 +26,10 @@ Compliation of information for testing the [opendatahub-io evaluation framework 
 * The common weakness database provides the context.
 * The AI Agent reads the code, attempts to analyze it, and outputs a response (e.g., "This file has a path traversal vulnerability").
 * The agent-eval-harness manages this lifecycle. It feeds the code to your agent, captures the agent's behavior/answers, and automatically scores whether the agent correctly identified the exploit as unsafe.
-> So... how do we test the tester?
+
+## How it works
+When running a test suite, the harness:
+* Fetches the Dataset: It pulls a dataset of test cases.
+* Executes the Agent/Model: It triggers the target agent inside a controlled environment (often using sandbox containers or mock interactions), tracking how the agent handles prompts, calls tools, and arrives at an answer.  
+* Applies Metrics: It applies LLM-as-a-judge scoring or traditional deterministic scoring against the agent's full execution trace.  
+* Aggregates & Tracks: The results are combined into a standardized score. The complete execution record (including the prompt trace, latency, hardware utilization, and scores) is exported to an observability server like MLflow or Prometheus.
