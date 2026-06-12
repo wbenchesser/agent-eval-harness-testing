@@ -15,11 +15,24 @@ Compliation of information for testing the [opendatahub-io evaluation framework 
         * Open source.
         * Cloneable from [GitHub](https://github.com/OWASP-Benchmark).
 
+## Foundations
+* Agents
+    * AI agents differ from standard LLMs because they operate in loops, break down complex tasks, and use external "tools" (like querying a database or executing code). Evaluating them requires tracking their entire trajectory (the steps they took), not just the final output.
+* Evaluation Frameworks
+    * A toolkit built to act as a standardized, automated "grading machine" for AI.
+    * What they do:
+        * Automatically downloads public benchmarks and formats them into a clean structure the AI can read.
+        * It has built-in connectors to talk to any model to avoid rewriting API calls.
+        * It handles few-shot prompting (giving the AI 3 or 4 examples of how to answer before asking the real question) uniformly.
+        * It applies advanced scoring math. It doesn't just look for exact text matches; it uses regex, log-likelihood (how confident the model was), or even "LLM-as-a-Judge" to score the answer.
+* agent-eval-harness
+    * Since running an evaluation framework locally can heavily lag your machine or require massive GPU power, agent-eval-harness acts like a manager. It takes a request from a user, spins up a temporary container in the cloud, drops an evaluation framework (like LightEval) into that container, lets it run the test, grabs the final report, and shuts the container down.
+
 
 ## Concepts
 
 * In an evaluation setup, the common weakness databases (i.e. OWASP Benchmark) is the vulnerable code, and the agent-eval-harness is the testing arena. However, the harness itself doesn't actively "test exploits."
-    * Instead, the AI Agent you are developing is the subject under evaluation.
+    * Instead, the AI Agent is the subject under evaluation.
 
 > *To be clear, the agent-eval-harness does not test code for vulnerabilities. It evaluates, benchmarks, and safety-tests AI agents and Large Language Models (LLMs).*
 
