@@ -55,4 +55,23 @@ When running a test suite, the harness:
 
 ### Built-Ins
 * An automated test suite for codebase verification is defined in the Makefile and pyproject.toml configurations.
-    * *Note: Because this places real model calls, you must export a valid API key into your terminal session first*
+    * *Note: Because this places real model calls, you must export a valid API key into your terminal session first.*
+    * However, these software tests only verify code correctness. They do not test the quality of the evaluation.
+
+### Custom Approach
+* Testing the quality of an AI evaluation is a data science concept known as Meta-Evaluation.
+* We could map the OWASP test suite directly into the harness data pipeline using these components:
+    1. Dataset Scaffolding
+        * The OWASP Benchmark consists of thousands of small test cases (primarily Java files) that are either definitively vulnerable (True Positives) or completely clean (True Negatives). You would package them as follows:
+            * Workspace Provisioning: Declare the target source code file under dataset.workspace.files so the framework copies the code cleanly into the execution sandbox.
+            * Ground-Truth Anchoring (annotations.yaml): Store the known OWASP score matrix inside each case's annotations folder.
+    2. The Security Judge Under Test
+        * We configure the automated LLM-as-a-judge that you want to test. You feed it the code file via the {{ outputs }} variable and ask it to output a structured verdict.
+    3. The Meta-Judge (An Inline check Script)
+        * To test the quality of the evaluation, you write an inline Python check judge. This judge does not look at the code; it evaluates the relationship between what the LLM Judge predicted and what the OWASP annotations.yaml asserted.
+
+### Considerations
+* Cost-Management
+    * The full OWASP Benchmark contains over 2,700 individual test cases. Running a multi-sampled LLM judge loop over the entire dataset across multiple iterations would result in massive cloud API token expenditures. It makes more sense to leverage the harness's filtering flag (/eval-run --cases) to run evaluations over targeted, representative subsets. 
+* Code-Instruction Isolation
+    * Some OWASP test cases contain text strings inside code comments describing the vulnerability. Ensure your underlying judge prompt instructs the evaluating model to ignore code comments and focus exclusively on the executable logical flows to avoid cheating or artificial accuracy boosts.
