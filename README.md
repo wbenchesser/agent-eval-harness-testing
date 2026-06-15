@@ -59,16 +59,30 @@ When running a test suite, the harness:
     * However, these software tests only verify code correctness. They do not test the quality of the evaluation.
 
 ### Custom Approach
+
+**✅ IMPLEMENTED** — See [META_EVALUATOR.md](META_EVALUATOR.md) for full documentation.
+
 * Testing the quality of an AI evaluation is a data science concept known as Meta-Evaluation.
-* We could map the OWASP test suite directly into the harness data pipeline using these components:
-    1. Dataset Scaffolding
-        * The OWASP Benchmark consists of thousands of small test cases (primarily Java files) that are either definitively vulnerable (True Positives) or completely clean (True Negatives). You would package them as follows:
-            * Workspace Provisioning: Declare the target source code file under dataset.workspace.files so the framework copies the code cleanly into the execution sandbox.
-            * Ground-Truth Anchoring (annotations.yaml): Store the known OWASP score matrix inside each case's annotations folder.
-    2. The Security Judge Under Test
-        * We configure the automated LLM-as-a-judge that you want to test. You feed it the code file via the {{ outputs }} variable and ask it to output a structured verdict.
-    3. The Meta-Judge (An Inline check Script)
-        * To test the quality of the evaluation, you write an inline Python check judge. This judge does not look at the code; it evaluates the relationship between what the LLM Judge predicted and what the OWASP annotations.yaml asserted.
+* We have implemented a standalone Python tool that maps the OWASP test suite to evaluate LLM security judges using these components:
+    1. **Dataset Scaffolding** (`meta_evaluator/dataset/`)
+        * Loads all 2,740 OWASP Benchmark test cases with ground truth labels (vulnerable vs. clean, CWE mappings)
+        * Supports stratified sampling to preserve CWE distribution and TP/TN ratio
+        * Fetches Java source files from GitHub or local clone
+    2. **The Security Judge Under Test** (`meta_evaluator/judge/`)
+        * Configurable LLM (Anthropic Claude or OpenAI) that reads Java code and outputs structured verdicts
+        * System prompt with **Code-Instruction Isolation** (ignores comments to prevent cheating)
+        * Async execution with rate limiting, cost tracking, and resumability
+    3. **The Meta-Judge** (`meta_evaluator/scoring/`)
+        * Compares LLM verdicts against OWASP ground truth
+        * Computes confusion matrix, TPR/FPR, Youden Index per CWE
+        * Generates reports (console, JSON, CSV)
+
+**Quick Start:**
+```bash
+pip install -e .
+export ANTHROPIC_API_KEY="sk-ant-..."
+meta-eval evaluate --sample-size 100
+```
 
 ### Considerations
 * Cost-Management
