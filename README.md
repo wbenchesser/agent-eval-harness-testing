@@ -25,8 +25,11 @@ Compliation of information for testing the [opendatahub-io evaluation framework 
         * It has built-in connectors to talk to any model to avoid rewriting API calls.
         * It handles few-shot prompting (giving the AI 3 or 4 examples of how to answer before asking the real question) uniformly.
         * It applies advanced scoring math. It doesn't just look for exact text matches; it uses regex, log-likelihood (how confident the model was), or even "LLM-as-a-Judge" to score the answer.
+* Testing 
+    * In traditional software engineering, we test by feeding a function a known input, and writing an assertion statement checking if the output matches an exact expected value. With AI Agents and LLMs, testing is much harder since their output is non-deterministic and open-ended.
 * agent-eval-harness
     * Since running an evaluation framework locally can heavily lag your machine or require massive GPU power, agent-eval-harness acts like a manager. It takes a request from a user, spins up a temporary container in the cloud, drops an evaluation framework (like LightEval) into that container, lets it run the test, grabs the final report, and shuts the container down.
+> *This project is a Continuous Integration (CI) and automated testing framework specifically built for AI agents and LLM skills. Instead of checking for exact string matches, it runs the AI agent in an isolated sandbox, collects what the agent produced, and uses a mix of deterministic code and LLM sub-agents ("LLM-as-a-judge") to evaluate and grade the quality, safety, and efficiency of the agent's work.*
 
 
 ## Concepts
@@ -46,3 +49,10 @@ When running a test suite, the harness:
 * Executes the Agent/Model: It triggers the target agent inside a controlled environment (often using sandbox containers or mock interactions), tracking how the agent handles prompts, calls tools, and arrives at an answer.  
 * Applies Metrics: It applies LLM-as-a-judge scoring or traditional deterministic scoring against the agent's full execution trace.  
 * Aggregates & Tracks: The results are combined into a standardized score. The complete execution record (including the prompt trace, latency, hardware utilization, and scores) is exported to an observability server like MLflow or Prometheus.
+
+## Testing
+> *So... how do we test the tester?*
+
+### Built-Ins
+* An automated test suite for codebase verification is defined in the Makefile and pyproject.toml configurations.
+    * *Note: Because this places real model calls, you must export a valid API key into your terminal session first*
