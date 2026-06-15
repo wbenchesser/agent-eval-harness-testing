@@ -28,7 +28,7 @@ class DatasetConfig(BaseModel):
 class JudgeConfig(BaseModel):
     """LLM provider and model configuration."""
 
-    provider: Literal["anthropic", "openai"]
+    provider: Literal["anthropic", "openai", "vertex"]
     model: str
     api_key_env: str
     max_tokens: int = 1024
@@ -36,6 +36,9 @@ class JudgeConfig(BaseModel):
     temperature: float | None = None
     max_retries: int = 3
     requests_per_minute: int = 50
+    gcp_project_env: str = "GCP_PROJECT_ID"
+    gcp_region_env: str = "GCP_REGION"
+    gcp_location: str = "us-central1"
 
     def get_api_key(self) -> str:
         """Retrieve API key from environment variable."""
@@ -46,6 +49,20 @@ class JudgeConfig(BaseModel):
                 f"Please set it with your API key."
             )
         return key
+
+    def get_gcp_project(self) -> str:
+        """Retrieve GCP project ID from environment variable."""
+        project = os.environ.get(self.gcp_project_env)
+        if not project:
+            raise ValueError(
+                f"Environment variable {self.gcp_project_env} not set. "
+                f"Required for Vertex AI provider."
+            )
+        return project
+
+    def get_gcp_region(self) -> str:
+        """Retrieve GCP region from environment variable or use default."""
+        return os.environ.get(self.gcp_region_env, self.gcp_location)
 
 
 class ExecutionConfig(BaseModel):

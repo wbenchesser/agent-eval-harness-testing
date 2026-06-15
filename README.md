@@ -80,7 +80,18 @@ When running a test suite, the harness:
 **Quick Start:**
 ```bash
 pip install -e .
+
+# Choose your provider:
+# For Anthropic
 export ANTHROPIC_API_KEY="sk-ant-..."
+
+# For OpenAI
+export OPENAI_API_KEY="sk-..."
+
+# For Google Vertex AI
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/key.json"
+export GCP_PROJECT_ID="your-project"
+
 meta-eval evaluate --sample-size 100
 ```
 

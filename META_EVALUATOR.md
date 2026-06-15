@@ -29,7 +29,7 @@ dataset:
   sample_size: 100  # Start with 100 cases (~$1-3 per run)
 
 judge:
-  provider: "anthropic"  # or "openai"
+  provider: "anthropic"  # or "openai" or "vertex"
   model: "claude-opus-4-8"
   api_key_env: "ANTHROPIC_API_KEY"
 ```
@@ -37,7 +37,16 @@ judge:
 Set your API key:
 
 ```bash
+# For Anthropic
 export ANTHROPIC_API_KEY="sk-ant-..."
+
+# For OpenAI
+export OPENAI_API_KEY="sk-..."
+
+# For Google Vertex AI
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account-key.json"
+export GCP_PROJECT_ID="your-project-id"
+export GCP_REGION="us-central1"  # Optional, defaults to us-central1
 ```
 
 ## Usage
@@ -101,10 +110,17 @@ execution:
 
 ## Cost Management
 
-Approximate costs (Claude Opus 4.8):
-- 100 cases: $1-3
-- 500 cases: $5-15
-- Full 2,740 cases: $25-75
+Approximate costs per 100 cases by model:
+- **Claude Opus 4.8**: $1-3
+- **GPT-4o**: $0.8-2.5
+- **Gemini 2.5 Pro**: $0.4-1.2
+- **Gemini 2.5 Flash**: $0.03-0.10
+
+Full 2,740 cases costs:
+- **Claude Opus 4.8**: $25-75
+- **GPT-4o**: $20-65
+- **Gemini 2.5 Pro**: $10-30
+- **Gemini 2.5 Flash**: $1-3
 
 The `sample_size` config controls the number of cases. Stratified sampling preserves CWE distribution and TP/TN ratio.
 
@@ -118,6 +134,58 @@ The `sample_size` config controls the number of cases. Stratified sampling prese
 ## Code-Instruction Isolation
 
 The system prompt instructs the LLM to **IGNORE code comments** because some OWASP test cases contain comments describing the vulnerability. This prevents "cheating" and tests whether the LLM can identify vulnerabilities from code logic alone.
+
+## Provider-Specific Configuration
+
+### Anthropic Claude
+
+```yaml
+judge:
+  provider: "anthropic"
+  model: "claude-opus-4-8"  # or claude-sonnet-4-6, claude-haiku-4-5
+  api_key_env: "ANTHROPIC_API_KEY"
+  thinking: "adaptive"  # or "disabled"
+```
+
+### OpenAI
+
+```yaml
+judge:
+  provider: "openai"
+  model: "gpt-4o"  # or gpt-4o-mini
+  api_key_env: "OPENAI_API_KEY"
+```
+
+### Google Vertex AI
+
+```yaml
+judge:
+  provider: "vertex"
+  model: "gemini-2.5-pro-latest"  # or gemini-2.5-flash-latest, gemini-1.5-pro
+  api_key_env: "GOOGLE_APPLICATION_CREDENTIALS"
+  gcp_project_env: "GCP_PROJECT_ID"
+  gcp_region_env: "GCP_REGION"
+  gcp_location: "us-central1"  # Default region
+```
+
+**Authentication Setup:**
+
+```bash
+# Option 1: Service Account Key
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account-key.json"
+export GCP_PROJECT_ID="your-gcp-project"
+
+# Option 2: Application Default Credentials (ADC)
+gcloud auth application-default login
+export GCP_PROJECT_ID="your-gcp-project"
+
+# Optional: Override region
+export GCP_REGION="us-east1"
+```
+
+**Note:** Vertex AI does not support extended thinking like Anthropic's `thinking` parameter.
+
+**For detailed Vertex AI setup instructions**, see [VERTEX_AI_SETUP.md](VERTEX_AI_SETUP.md).
 
 ## Testing
 

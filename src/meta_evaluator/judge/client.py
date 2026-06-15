@@ -1,6 +1,7 @@
 """LLM client abstraction with async execution, rate limiting, and cost tracking."""
 
 import asyncio
+import json
 import time
 from pathlib import Path
 
@@ -13,6 +14,14 @@ from meta_evaluator.dataset.loader import TestCase
 from .prompts import SYSTEM_PROMPT, build_user_prompt
 from .verdict import JudgeResult, Verdict
 
+# Vertex AI imports (lazy loaded to avoid import errors if not installed)
+try:
+    import vertexai
+    from vertexai.generative_models import GenerativeModel, GenerationConfig
+    VERTEX_AVAILABLE = True
+except ImportError:
+    VERTEX_AVAILABLE = False
+
 # Cost per 1M tokens (as of 2026-06)
 COST_TABLE = {
     "claude-opus-4-8": {"input": 5.00, "output": 25.00},
@@ -20,6 +29,10 @@ COST_TABLE = {
     "claude-haiku-4-5": {"input": 1.00, "output": 5.00},
     "gpt-4o": {"input": 2.50, "output": 10.00},
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gemini-2.5-pro-latest": {"input": 1.25, "output": 5.00},
+    "gemini-2.5-flash-latest": {"input": 0.075, "output": 0.30},
+    "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
+    "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
 }
 
 
@@ -66,6 +79,17 @@ class SecurityJudge:
                 api_key=config.get_api_key(),
                 max_retries=config.max_retries,
             )
+        elif config.provider == "vertex":
+            if not VERTEX_AVAILABLE:
+                raise ImportError(
+                    "google-cloud-aiplatform is not installed. "
+                    "Install it with: pip install google-cloud-aiplatform"
+                )
+            # Initialize Vertex AI
+            project = config.get_gcp_project()
+            location = config.get_gcp_region()
+            vertexai.init(project=project, location=location)
+            self.client = GenerativeModel(config.model)
 
     async def evaluate_case(self, case: TestCase) -> JudgeResult:
         """Evaluate a single test case. Core method."""
@@ -103,6 +127,32 @@ class SecurityJudge:
                 verdict = response.choices[0].message.parsed
                 input_tokens = response.usage.prompt_tokens
                 output_tokens = response.usage.completion_tokens
+
+            elif self.config.provider == "vertex":
+                # Combine system and user prompts for Vertex AI
+                combined_prompt = f"{SYSTEM_PROMPT}\n\n{user_prompt}"
+
+                # Configure generation with JSON schema
+                generation_config = GenerationConfig(
+                    temperature=self.config.temperature if self.config.temperature else 0.0,
+                    max_output_tokens=self.config.max_tokens,
+                    response_mime_type="application/json",
+                    response_schema=Verdict.model_json_schema(),
+                )
+
+                # Vertex AI is synchronous, wrap in async
+                response = await asyncio.to_thread(
+                    self.client.generate_content,
+                    contents=combined_prompt,
+                    generation_config=generation_config,
+                )
+
+                # Parse JSON response
+                verdict = Verdict.model_validate_json(response.text)
+
+                # Extract token usage
+                input_tokens = response.usage_metadata.prompt_token_count
+                output_tokens = response.usage_metadata.candidates_token_count
 
             elapsed = time.monotonic() - start
             cost = self._calculate_cost(input_tokens, output_tokens)
