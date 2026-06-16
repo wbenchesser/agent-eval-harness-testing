@@ -5,8 +5,7 @@ import json
 import time
 from pathlib import Path
 
-from anthropic import AsyncAnthropic
-from openai import AsyncOpenAI
+import httpx
 
 from meta_evaluator.config import ExecutionConfig, JudgeConfig
 from meta_evaluator.dataset.loader import TestCase
@@ -14,25 +13,11 @@ from meta_evaluator.dataset.loader import TestCase
 from .prompts import SYSTEM_PROMPT, build_user_prompt
 from .verdict import JudgeResult, Verdict
 
-# Vertex AI imports (lazy loaded to avoid import errors if not installed)
-try:
-    import vertexai
-    from vertexai.generative_models import GenerativeModel, GenerationConfig
-    VERTEX_AVAILABLE = True
-except ImportError:
-    VERTEX_AVAILABLE = False
-
-# Cost per 1M tokens (as of 2026-06)
+# Cost per 1M tokens (as of 2026-06) - Red Hat Corporate Vertex AI
 COST_TABLE = {
-    "claude-opus-4-8": {"input": 5.00, "output": 25.00},
-    "claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
-    "claude-haiku-4-5": {"input": 1.00, "output": 5.00},
-    "gpt-4o": {"input": 2.50, "output": 10.00},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "gemini-2.5-pro-latest": {"input": 1.25, "output": 5.00},
-    "gemini-2.5-flash-latest": {"input": 0.075, "output": 0.30},
-    "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
-    "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
+    "claude-opus-4-8@20250514": {"input": 5.00, "output": 25.00},
+    "claude-sonnet-4-6@20250514": {"input": 3.00, "output": 15.00},
+    "claude-haiku-4-5@20251001": {"input": 1.00, "output": 5.00},
 }
 
 
@@ -69,27 +54,13 @@ class SecurityJudge:
         self.config = config
         self.rate_limiter = RateLimiter(config.requests_per_minute)
 
-        if config.provider == "anthropic":
-            self.client = AsyncAnthropic(
-                api_key=config.get_api_key(),
-                max_retries=config.max_retries,
-            )
-        elif config.provider == "openai":
-            self.client = AsyncOpenAI(
-                api_key=config.get_api_key(),
-                max_retries=config.max_retries,
-            )
-        elif config.provider == "vertex":
-            if not VERTEX_AVAILABLE:
-                raise ImportError(
-                    "google-cloud-aiplatform is not installed. "
-                    "Install it with: pip install google-cloud-aiplatform"
-                )
-            # Initialize Vertex AI
-            project = config.get_gcp_project()
-            location = config.get_gcp_region()
-            vertexai.init(project=project, location=location)
-            self.client = GenerativeModel(config.model)
+        # Red Hat Corporate Vertex AI endpoint
+        self.client = httpx.AsyncClient(
+            timeout=httpx.Timeout(60.0, connect=10.0),
+            limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
+        )
+        self.corp_api_base = config.get_vertex_corp_api()
+        self.corp_user_key = config.get_vertex_corp_key()
 
     async def evaluate_case(self, case: TestCase) -> JudgeResult:
         """Evaluate a single test case. Core method."""
@@ -99,60 +70,80 @@ class SecurityJudge:
         start = time.monotonic()
 
         try:
-            if self.config.provider == "anthropic":
-                response = await self.client.messages.parse(
-                    model=self.config.model,
-                    max_tokens=self.config.max_tokens,
-                    thinking={"type": self.config.thinking},
-                    system=SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": user_prompt}],
-                    output_schema=Verdict,
-                    temperature=self.config.temperature,
-                )
-                verdict = response.parsed
-                input_tokens = response.usage.input_tokens
-                output_tokens = response.usage.output_tokens
+            # Red Hat Corporate Vertex AI endpoint using Anthropic-compatible Messages API
+            # Determine model tier for URL path (haiku, sonnet, opus)
+            model_tier = "haiku"
+            if "sonnet" in self.config.model.lower():
+                model_tier = "sonnet"
+            elif "opus" in self.config.model.lower():
+                model_tier = "opus"
 
-            elif self.config.provider == "openai":
-                response = await self.client.beta.chat.completions.parse(
-                    model=self.config.model,
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    response_format=Verdict,
-                    max_tokens=self.config.max_tokens,
-                    temperature=self.config.temperature,
-                )
-                verdict = response.choices[0].message.parsed
-                input_tokens = response.usage.prompt_tokens
-                output_tokens = response.usage.completion_tokens
+            url = f"{self.corp_api_base}/{model_tier}/models/{self.config.model}:streamRawPredict"
 
-            elif self.config.provider == "vertex":
-                # Combine system and user prompts for Vertex AI
-                combined_prompt = f"{SYSTEM_PROMPT}\n\n{user_prompt}"
+            # Add JSON schema instruction to system prompt for structured output
+            json_schema = Verdict.model_json_schema()
+            system_prompt_with_schema = (
+                f"{SYSTEM_PROMPT}\n\n"
+                f"You must respond with ONLY a valid JSON object matching this exact schema:\n"
+                f"{json.dumps(json_schema, indent=2)}\n\n"
+                f"Do not include any text before or after the JSON object."
+            )
 
-                # Configure generation with JSON schema
-                generation_config = GenerationConfig(
-                    temperature=self.config.temperature if self.config.temperature else 0.0,
-                    max_output_tokens=self.config.max_tokens,
-                    response_mime_type="application/json",
-                    response_schema=Verdict.model_json_schema(),
-                )
+            # Build request payload (Anthropic Messages API format)
+            payload = {
+                "anthropic_version": "vertex-2023-10-16",
+                "max_tokens": self.config.max_tokens,
+                "temperature": self.config.temperature if self.config.temperature is not None else 0.0,
+                "system": system_prompt_with_schema,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [{"type": "text", "text": user_prompt}]
+                    }
+                ]
+            }
 
-                # Vertex AI is synchronous, wrap in async
-                response = await asyncio.to_thread(
-                    self.client.generate_content,
-                    contents=combined_prompt,
-                    generation_config=generation_config,
-                )
+            # Add thinking parameter if configured
+            if self.config.thinking:
+                payload["thinking"] = {"type": self.config.thinking}
 
-                # Parse JSON response
-                verdict = Verdict.model_validate_json(response.text)
+            headers = {
+                "Authorization": f"Bearer {self.corp_user_key}",
+                "Content-Type": "application/json",
+            }
 
-                # Extract token usage
-                input_tokens = response.usage_metadata.prompt_token_count
-                output_tokens = response.usage_metadata.candidates_token_count
+            # Make API call
+            response = await self.client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+
+            # Parse response
+            response_data = response.json()
+
+            # Extract content from Claude response
+            # The API returns standard Anthropic Messages format
+            content_blocks = response_data.get("content", [])
+            text_content = ""
+            for block in content_blocks:
+                if block.get("type") == "text":
+                    text_content += block.get("text", "")
+
+            # Parse structured output from text
+            # Strip markdown code fences if present
+            text_content = text_content.strip()
+            if text_content.startswith("```json"):
+                text_content = text_content[7:]
+            if text_content.startswith("```"):
+                text_content = text_content[3:]
+            if text_content.endswith("```"):
+                text_content = text_content[:-3]
+            text_content = text_content.strip()
+
+            verdict = Verdict.model_validate_json(text_content)
+
+            # Extract token usage
+            usage = response_data.get("usage", {})
+            input_tokens = usage.get("input_tokens", 0)
+            output_tokens = usage.get("output_tokens", 0)
 
             elapsed = time.monotonic() - start
             cost = self._calculate_cost(input_tokens, output_tokens)

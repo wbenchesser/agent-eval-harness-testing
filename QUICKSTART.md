@@ -3,13 +3,22 @@
 ## Installation
 
 ```bash
-# Clone and install
+# Set Red Hat corporate credentials
+export MODEL_API="https://claude--apicast-production.apps.int.stc.ai.prod.us-east-1.aws.paas.redhat.com:443"
+export USER_KEY="your-models-corp-credential"
+
+# Install dependencies
 cd agent-eval-harness-testing
 pip install -e .
-
-# Set API key
-export ANTHROPIC_API_KEY="sk-ant-..."
 ```
+
+## Test Connection (Optional)
+
+```bash
+python3 test_corporate_endpoint.py
+```
+
+Expected: `✅ SUCCESS! Connection established.`
 
 ## Run Your First Evaluation (10 cases, ~30 seconds)
 
@@ -19,7 +28,7 @@ meta-eval evaluate --sample-size 10
 
 This will:
 1. Download 10 stratified-sampled OWASP test cases
-2. Run Claude Opus to judge each one for vulnerabilities
+2. Run Claude (via Red Hat corporate endpoint) to judge each one for vulnerabilities
 3. Compare verdicts to ground truth and show metrics
 
 ## Expected Output
@@ -38,7 +47,7 @@ Recall:    0.800
 F1 Score:  0.842
 Youden:    +0.733
 Cases: 10  Errors: 0
-Cost: $0.1250  Tokens: 12,543
+Cost: $0.0500  Tokens: 12,543
 
 === PER-CWE BREAKDOWN ===
 ...
@@ -64,45 +73,60 @@ cat results/verdicts/BenchmarkTest00001.json
 open results/results.csv
 ```
 
-## Run a Larger Evaluation (100 cases, ~5 minutes, ~$1-3)
+## Run a Larger Evaluation (100 cases, ~5 minutes, ~$0.50-1.50)
 
 ```bash
 meta-eval evaluate --sample-size 100
 ```
 
-## Cost Estimates
+## Cost Estimates (Claude Haiku)
 
 | Sample Size | Approx. Cost | Time | Use Case |
 |------------|-------------|------|----------|
-| 10 | $0.10 | 30s | Quick test |
-| 100 | $1-3 | 5min | Standard eval |
-| 500 | $5-15 | 25min | Thorough eval |
-| 2,740 (full) | $25-75 | 2h | Publication-quality |
+| 10 | $0.05 | 30s | Quick test |
+| 100 | $0.50-1.50 | 5min | Standard eval |
+| 500 | $2.50-7.50 | 25min | Thorough eval |
+| 2,740 (full) | $15-40 | 2h | Publication-quality |
+
+**Note:** Costs shown for Haiku model. Sonnet costs ~3x more, Opus ~5x more.
 
 ## Resume a Failed Run
 
 If a run crashes, just re-run the same command. Already-evaluated cases are skipped automatically.
 
-## Compare Models
+## Change Models
 
+Edit `config.yaml`:
+
+```yaml
+judge:
+  model: "claude-sonnet-4-6@20250514"  # or claude-opus-4-8@20250514
+```
+
+Then run again:
 ```bash
-# Run with Claude Opus
-meta-eval run --sample-size 100
-mv results results-opus
-
-# Edit config.yaml to use GPT-4o, then run again
-meta-eval run --sample-size 100
-mv results results-gpt4
-
-# Compare scorecard.json files
+meta-eval evaluate --sample-size 100
 ```
 
 ## Troubleshooting
 
-**"Environment variable ANTHROPIC_API_KEY not set"**
+**"Environment variable MODEL_API not set"**
 ```bash
-export ANTHROPIC_API_KEY="your-key-here"
+export MODEL_API="https://claude--apicast-production.apps.int.stc.ai.prod.us-east-1.aws.paas.redhat.com:443"
 ```
+
+**"Environment variable USER_KEY not set"**
+```bash
+export USER_KEY="your-credential-here"
+```
+
+**"401 Unauthorized"**
+
+Check your credential in the models.corp platform and ensure it hasn't expired.
+
+**"Connection timeout"**
+
+Ensure you're connected to the Red Hat VPN or internal network.
 
 **"Configuration file not found"**
 
@@ -110,15 +134,16 @@ Make sure you're in the project root directory where `config.yaml` exists.
 
 **Rate limit errors**
 
-Reduce `concurrency` in config.yaml:
+Reduce `requests_per_minute` in config.yaml:
 ```yaml
-execution:
-  concurrency: 5  # Lower from default 10
+judge:
+  requests_per_minute: 30  # Lower from default 50
 ```
 
 ## Next Steps
 
 - Read [META_EVALUATOR.md](META_EVALUATOR.md) for full documentation
+- Read [CORPORATE_VERTEX_SETUP.md](CORPORATE_VERTEX_SETUP.md) for detailed setup
 - Edit `config.yaml` to customize models, sampling, concurrency
 - Run `pytest` to verify your installation
 - Use `meta-eval scaffold` to explore the dataset without API calls

@@ -1,13 +1,13 @@
 # OWASP Security Meta-Evaluator
 
-A standalone Python tool for testing the quality of LLM-based security judges using the OWASP Benchmark.
+A standalone Python tool for testing the quality of LLM-based security judges using the OWASP Benchmark with Red Hat Corporate Vertex AI (Claude models).
 
 ## Overview
 
 This meta-evaluator implements the "Custom Approach" described in the main README. It evaluates how accurately an LLM can identify security vulnerabilities in Java code by:
 
 1. **Dataset Scaffolding** — Loading 2,740 OWASP Benchmark test cases with known vulnerability ground truth
-2. **Security Judge** — Running an LLM that reads Java code and outputs structured vulnerability verdicts
+2. **Security Judge** — Running Claude via Red Hat's corporate endpoint to read Java code and output structured vulnerability verdicts
 3. **Meta-Judge** — Comparing LLM verdicts against ground truth and computing metrics (confusion matrix, TPR/FPR/Youden per CWE)
 
 ## Installation
@@ -22,32 +22,27 @@ pip install -e ".[dev]"
 
 ## Configuration
 
-Edit `config.yaml`:
+Edit `config.yaml` to select your model:
 
 ```yaml
 dataset:
-  sample_size: 100  # Start with 100 cases (~$1-3 per run)
+  sample_size: 100  # Start with 100 cases (~$0.5-1.5 per run with Haiku)
 
 judge:
-  provider: "anthropic"  # or "openai" or "vertex"
-  model: "claude-opus-4-8"
-  api_key_env: "ANTHROPIC_API_KEY"
+  model: "claude-haiku-4-5@20251001"  # or claude-sonnet-4-6@20250514, claude-opus-4-8@20250514
 ```
 
-Set your API key:
+Set your Red Hat corporate credentials:
 
 ```bash
-# For Anthropic
-export ANTHROPIC_API_KEY="sk-ant-..."
-
-# For OpenAI
-export OPENAI_API_KEY="sk-..."
-
-# For Google Vertex AI
-export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account-key.json"
-export GCP_PROJECT_ID="your-project-id"
-export GCP_REGION="us-central1"  # Optional, defaults to us-central1
+export MODEL_API="https://claude--apicast-production.apps.int.stc.ai.prod.us-east-1.aws.paas.redhat.com:443"
+export USER_KEY="your-models-corp-credential"
 ```
+
+**Available Models:**
+- `claude-haiku-4-5@20251001` — Fast, cost-efficient ($1.00/$5.00 per 1M tokens)
+- `claude-sonnet-4-6@20250514` — Balanced accuracy/speed ($3.00/$15.00 per 1M tokens)
+- `claude-opus-4-8@20250514` — Maximum accuracy ($5.00/$25.00 per 1M tokens)
 
 ## Usage
 

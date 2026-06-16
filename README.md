@@ -79,21 +79,26 @@ When running a test suite, the harness:
 
 **Quick Start:**
 ```bash
+# 1. Set up Red Hat Corporate Vertex AI credentials
+export MODEL_API="https://claude--apicast-production.apps.int.stc.ai.prod.us-east-1.aws.paas.redhat.com:443"
+export USER_KEY="your-models-corp-credential-here"
+
+# 2. Install dependencies
 pip install -e .
 
-# Choose your provider:
-# For Anthropic
-export ANTHROPIC_API_KEY="sk-ant-..."
+# 3. Test connection (optional)
+python3 test_corporate_endpoint.py
 
-# For OpenAI
-export OPENAI_API_KEY="sk-..."
-
-# For Google Vertex AI
-export GOOGLE_APPLICATION_CREDENTIALS="/path/to/key.json"
-export GCP_PROJECT_ID="your-project"
-
+# 4. Run evaluation (10 cases ~$0.05, 100 cases ~$0.50-1.50)
 meta-eval evaluate --sample-size 100
 ```
+
+**Available Models:**
+- `claude-haiku-4-5@20251001` (Fast, $1/$5 per 1M tokens) - Recommended
+- `claude-sonnet-4-6@20250514` (Balanced, $3/$15 per 1M tokens)
+- `claude-opus-4-8@20250514` (Accurate, $5/$25 per 1M tokens)
+
+See [QUICKSTART.md](QUICKSTART.md) for quick reference or [SETUP.md](SETUP.md) for detailed setup instructions.
 
 ### Considerations
 * Cost-Management
