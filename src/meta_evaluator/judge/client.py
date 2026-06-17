@@ -3,9 +3,13 @@
 import asyncio
 import json
 import time
+import warnings
 from pathlib import Path
 
 import httpx
+
+# Suppress SSL warnings for corporate self-signed certificates
+warnings.filterwarnings('ignore', message='Unverified HTTPS request')
 
 from meta_evaluator.config import ExecutionConfig, JudgeConfig
 from meta_evaluator.dataset.loader import TestCase
@@ -55,9 +59,11 @@ class SecurityJudge:
         self.rate_limiter = RateLimiter(config.requests_per_minute)
 
         # Red Hat Corporate Vertex AI endpoint
+        # Disable SSL verification for corporate self-signed certificates
         self.client = httpx.AsyncClient(
             timeout=httpx.Timeout(60.0, connect=10.0),
             limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
+            verify=False,
         )
         self.corp_api_base = config.get_vertex_corp_api()
         self.corp_user_key = config.get_vertex_corp_key()
@@ -69,6 +75,56 @@ class SecurityJudge:
         user_prompt = build_user_prompt(case.source_code, case.test_name)
         start = time.monotonic()
 
+        # Retry with exponential backoff for transient network errors
+        max_retries = self.config.max_retries
+        for attempt in range(max_retries):
+            try:
+                return await self._evaluate_with_api(case, user_prompt, start)
+            except (httpx.ConnectError, OSError) as e:
+                # DNS/network errors - retry with backoff
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt  # 1s, 2s, 4s
+                    await asyncio.sleep(wait_time)
+                    continue
+                # Final attempt failed - return error result
+                elapsed = time.monotonic() - start
+                return JudgeResult(
+                    test_name=case.test_name,
+                    ground_truth_vulnerable=case.is_vulnerable,
+                    ground_truth_cwe=case.cwe,
+                    ground_truth_category=case.category,
+                    verdict=Verdict(
+                        is_vulnerable=False, cwe=None, confidence=0.0,
+                        reasoning=f"ERROR after {max_retries} retries: {e}"
+                    ),
+                    input_tokens=0,
+                    output_tokens=0,
+                    cost_usd=0.0,
+                    latency_seconds=elapsed,
+                    model=self.config.model,
+                    error=str(e),
+                )
+            except Exception as e:
+                # Non-retryable errors - fail immediately
+                elapsed = time.monotonic() - start
+                return JudgeResult(
+                    test_name=case.test_name,
+                    ground_truth_vulnerable=case.is_vulnerable,
+                    ground_truth_cwe=case.cwe,
+                    ground_truth_category=case.category,
+                    verdict=Verdict(
+                        is_vulnerable=False, cwe=None, confidence=0.0, reasoning=f"ERROR: {e}"
+                    ),
+                    input_tokens=0,
+                    output_tokens=0,
+                    cost_usd=0.0,
+                    latency_seconds=elapsed,
+                    model=self.config.model,
+                    error=str(e),
+                )
+
+    async def _evaluate_with_api(self, case: TestCase, user_prompt: str, start: float) -> JudgeResult:
+        """Internal method for API evaluation (separated for retry logic)."""
         try:
             # Red Hat Corporate Vertex AI endpoint using Anthropic-compatible Messages API
             # Determine model tier for URL path (haiku, sonnet, opus)
@@ -84,9 +140,14 @@ class SecurityJudge:
             json_schema = Verdict.model_json_schema()
             system_prompt_with_schema = (
                 f"{SYSTEM_PROMPT}\n\n"
-                f"You must respond with ONLY a valid JSON object matching this exact schema:\n"
+                f"RESPONSE FORMAT:\n"
+                f"You MUST respond with ONLY a raw JSON object - no markdown formatting, "
+                f"no code fences, no explanatory text.\n"
+                f"Start your response directly with {{ and end with }}.\n\n"
+                f"Required JSON schema:\n"
                 f"{json.dumps(json_schema, indent=2)}\n\n"
-                f"Do not include any text before or after the JSON object."
+                f"Example valid response:\n"
+                f'{{"is_vulnerable": true, "cwe": 89, "confidence": 0.95, "reasoning": "SQL injection via concatenation"}}'
             )
 
             # Build request payload (Anthropic Messages API format)
@@ -128,14 +189,29 @@ class SecurityJudge:
                     text_content += block.get("text", "")
 
             # Parse structured output from text
-            # Strip markdown code fences if present
+            # Strip markdown code fences and extract JSON
             text_content = text_content.strip()
+
+            # Remove markdown code fences
             if text_content.startswith("```json"):
                 text_content = text_content[7:]
             if text_content.startswith("```"):
                 text_content = text_content[3:]
             if text_content.endswith("```"):
                 text_content = text_content[:-3]
+            text_content = text_content.strip()
+
+            # If model added conversational wrapper, try to extract JSON
+            # Look for the first '{' and last '}' to isolate the JSON object
+            if not text_content.startswith("{"):
+                start_idx = text_content.find("{")
+                if start_idx != -1:
+                    text_content = text_content[start_idx:]
+            if not text_content.endswith("}"):
+                end_idx = text_content.rfind("}")
+                if end_idx != -1:
+                    text_content = text_content[:end_idx + 1]
+
             text_content = text_content.strip()
 
             verdict = Verdict.model_validate_json(text_content)
@@ -162,22 +238,8 @@ class SecurityJudge:
             )
 
         except Exception as e:
-            elapsed = time.monotonic() - start
-            return JudgeResult(
-                test_name=case.test_name,
-                ground_truth_vulnerable=case.is_vulnerable,
-                ground_truth_cwe=case.cwe,
-                ground_truth_category=case.category,
-                verdict=Verdict(
-                    is_vulnerable=False, cwe=None, confidence=0.0, reasoning=f"ERROR: {e}"
-                ),
-                input_tokens=0,
-                output_tokens=0,
-                cost_usd=0.0,
-                latency_seconds=elapsed,
-                model=self.config.model,
-                error=str(e),
-            )
+            # Let this propagate to evaluate_case for retry logic
+            raise
 
     def _calculate_cost(self, input_tokens: int, output_tokens: int) -> float:
         """Calculate cost in USD based on model pricing."""

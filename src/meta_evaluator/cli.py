@@ -112,7 +112,7 @@ async def cmd_run(config):
             cases, config.dataset.sample_size, config.dataset.random_seed
         )
 
-    print(f"\nRunning {config.judge.provider} judge ({config.judge.model})...")
+    print(f"\nRunning Vertex AI judge ({config.judge.model})...")
     judge = SecurityJudge(config.judge)
     results = await run_evaluation(cases, judge, config.execution)
 

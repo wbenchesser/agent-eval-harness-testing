@@ -4,8 +4,12 @@
 import asyncio
 import os
 import sys
+import warnings
 
 import httpx
+
+# Suppress SSL warnings for corporate self-signed certificates
+warnings.filterwarnings('ignore', message='Unverified HTTPS request')
 
 
 async def test_corporate_endpoint():
@@ -63,7 +67,7 @@ async def test_corporate_endpoint():
     print()
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
             response = await client.post(url, json=payload, headers=headers)
 
             if response.status_code == 200:
