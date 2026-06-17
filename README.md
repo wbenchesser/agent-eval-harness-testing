@@ -18,6 +18,7 @@ Compliation of information for testing the [opendatahub-io evaluation framework 
 ## Foundations
 * Agents
     * AI agents differ from standard LLMs because they operate in loops, break down complex tasks, and use external "tools" (like querying a database or executing code). Evaluating them requires tracking their entire trajectory (the steps they took), not just the final output.
+    > Agent = Model (The Brain) + Harness (The "Body" or Infrastructure)
 * Evaluation Frameworks
     * A toolkit built to act as a standardized, automated "grading machine" for AI.
     * What they do:
@@ -43,32 +44,31 @@ Compliation of information for testing the [opendatahub-io evaluation framework 
 * The AI Agent reads the code, attempts to analyze it, and outputs a response (e.g., "This file has a path traversal vulnerability").
 * The agent-eval-harness manages this lifecycle. It feeds the code to your agent, captures the agent's behavior/answers, and automatically scores whether the agent correctly identified the exploit as unsafe.
 
-## How it works
-When running a test suite, the harness:
-* Fetches the Dataset: It pulls a dataset of test cases.
-* Executes the Agent/Model: It triggers the target agent inside a controlled environment (often using sandbox containers or mock interactions), tracking how the agent handles prompts, calls tools, and arrives at an answer.  
-* Applies Metrics: It applies LLM-as-a-judge scoring or traditional deterministic scoring against the agent's full execution trace.  
-* Aggregates & Tracks: The results are combined into a standardized score. The complete execution record (including the prompt trace, latency, hardware utilization, and scores) is exported to an observability server like MLflow or Prometheus.
+## What does it do?
+1. Load Test Cases
+    * It ingests a dataset of examples of tasks (e.g., "process this customer refund") paired with the expected final outcome or sequence of actions.
+2. Invoke the Agent
+    * For each test case, the harness triggers the agent in a controlled environment (often a sandbox).  
+3. Capture Traces
+    * It records every step the agent takes, including tool calls, parameters passed, intermediate observations, and the final response.  
+4. Score the Results
+    * It runs a suite of metrics against the output. This can include:  
+        * Programmatic Graders: validation, database state verification, or code execution tests.  
+        * LLM-as-a-Judge: Using a stronger, separate LLM to evaluate the quality, tone, or faithfulness of the agent's reasoning.  
+        * Step-level Metrics Checking if the agent chose the correct tool at step 3, even if it eventually failed at step 5.  
+5. Report & Gate
+    * It aggregates results into a report. In professional settings, this is often used as a deployment gate. If the agent's performance on these tests drops below a certain threshold (a regression), the build or deployment is automatically blocked.
+
+> In the context of the OWASP benchmark, the evaluation harness **does not** look at, parse, or evaluate the OWASP code.
+
+> What it could do is determine whether your agent is actually right or wrong by acting as an automated grader that compares your agent's conclusions against the OWASP "answer key".
 
 ## Testing
-> *So... how do we test the tester?*
 
 ### Built-Ins
 * An automated test suite for codebase verification is defined in the Makefile and pyproject.toml configurations.
     * *Note: Because this places real model calls, you must export a valid API key into your terminal session first.*
     * However, these software tests only verify code correctness. They do not test the quality of the evaluation.
-
-### Custom Approach
-* Testing the quality of an AI evaluation is a data science concept known as Meta-Evaluation.
-* We could map the OWASP test suite directly into the harness data pipeline using these components:
-    1. Dataset Scaffolding
-        * The OWASP Benchmark consists of thousands of small test cases (primarily Java files) that are either definitively vulnerable (True Positives) or completely clean (True Negatives). You would package them as follows:
-            * Workspace Provisioning: Declare the target source code file under dataset.workspace.files so the framework copies the code cleanly into the execution sandbox.
-            * Ground-Truth Anchoring (annotations.yaml): Store the known OWASP score matrix inside each case's annotations folder.
-    2. The Security Judge Under Test
-        * We configure the automated LLM-as-a-judge that you want to test. You feed it the code file via the {{ outputs }} variable and ask it to output a structured verdict.
-    3. The Meta-Judge (An Inline check Script)
-        * To test the quality of the evaluation, you write an inline Python check judge. This judge does not look at the code; it evaluates the relationship between what the LLM Judge predicted and what the OWASP annotations.yaml asserted.
 
 ### Considerations
 * Cost-Management
