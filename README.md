@@ -63,6 +63,20 @@ Compliation of information for testing the [opendatahub-io evaluation framework 
 
 > What it could do is determine whether your agent is actually right or wrong by acting as an automated grader that compares your agent's conclusions against the OWASP "answer key".
 
+## Agent Eval Harness Use Case
+* Let's say there was a new Red Hat built an AI agent designed to handle customer billing issues. 
+    * The Goal: Help users with billing and issue refunds.
+    * The Tools: The agent can call get_user_payment_history() and execute_stripe_refund(amount, charge_id).
+    * The Guardrail Rule: Company policy states that any refund over $100 requires human manager approval.
+* An engineer just updated the agent's system prompt to make its tone friendlier, and upgraded the underlying model to a newer, cheaper LLM to save the company money. **Before pushing this to production, Red Hat needs to prove you didn't just give an AI the power to accidentally drain the company's bank account.**
+* This is where we spin up the agent-eval-harness locally. We pass it a dataset of distinct test cases showing when you might reward a refund and when you should not.
+* When we run `agent-eval run`:
+    * It spins up a sandbox. It mocks your database and  API so real money isn't actually moving.
+    * It feeds each of the cases to the agent. 
+    * Let's say the new model refunds a $500 dollar transaction even though it shouldn't.
+* The Harness intercepts the trace, catching that the agent called the refund tool. It sees that this is against the policy and marks the case as failed.
+* After going through all the cases, the harness generates a report. If enough cases failed, the depolyment can be automatically blocked. 
+
 ## Testing
 
 ### Built-Ins
