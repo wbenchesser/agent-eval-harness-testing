@@ -43,7 +43,8 @@ Compliation of information for testing the [opendatahub-io evaluation framework 
 * The AI Agent reads the code, attempts to analyze it, and outputs a response (e.g., "This file has a path traversal vulnerability").
 * The agent-eval-harness manages this lifecycle. It feeds the code to your agent, captures the agent's behavior/answers, and automatically scores whether the agent correctly identified the exploit as unsafe.
 
-## How it works
+## How It Works
+
 When running a test suite, the harness:
 * Fetches the Dataset: It pulls a dataset of test cases.
 * Executes the Agent/Model: It triggers the target agent inside a controlled environment (often using sandbox containers or mock interactions), tracking how the agent handles prompts, calls tools, and arrives at an answer.  
@@ -60,8 +61,6 @@ When running a test suite, the harness:
 
 ### Custom Approach
 
-**✅ IMPLEMENTED** — See [META_EVALUATOR.md](META_EVALUATOR.md) for full documentation.
-
 * Testing the quality of an AI evaluation is a data science concept known as Meta-Evaluation.
 * We have implemented a standalone Python tool that maps the OWASP test suite to evaluate LLM security judges using these components:
     1. **Dataset Scaffolding** (`meta_evaluator/dataset/`)
@@ -77,31 +76,11 @@ When running a test suite, the harness:
         * Computes confusion matrix, TPR/FPR, Youden Index per CWE
         * Generates reports (console, JSON, CSV)
 
-**Quick Start:**
-```bash
-# 1. Set up Red Hat Corporate Vertex AI credentials
-export MODEL_API="https://claude--apicast-production.apps.int.stc.ai.prod.us-east-1.aws.paas.redhat.com:443"
-export USER_KEY="your-models-corp-credential-here"
-
-# 2. Install dependencies
-pip install -e .
-
-# 3. Test connection (optional)
-python3 test_corporate_endpoint.py
-
-# 4. Run evaluation (10 cases ~$0.05, 100 cases ~$0.50-1.50)
-meta-eval evaluate --sample-size 100
-```
-
-**Available Models:**
-- `claude-haiku-4-5@20251001` (Fast, $1/$5 per 1M tokens) - Recommended
-- `claude-sonnet-4-6@20250514` (Balanced, $3/$15 per 1M tokens)
-- `claude-opus-4-8@20250514` (Accurate, $5/$25 per 1M tokens)
-
-See [QUICKSTART.md](QUICKSTART.md) for quick reference or [SETUP.md](SETUP.md) for detailed setup instructions.
-
 ### Considerations
 * Cost-Management
     * The full OWASP Benchmark contains over 2,700 individual test cases. Running a multi-sampled LLM judge loop over the entire dataset across multiple iterations would result in massive cloud API token expenditures. It makes more sense to leverage the harness's filtering flag (/eval-run --cases) to run evaluations over targeted, representative subsets. 
 * Code-Instruction Isolation
     * Some OWASP test cases contain text strings inside code comments describing the vulnerability. Ensure your underlying judge prompt instructs the evaluating model to ignore code comments and focus exclusively on the executable logical flows to avoid cheating or artificial accuracy boosts.
+
+## This Branch
+* The purpose of this branch is to simulate the power of llm-as-a-judge security testing. 
