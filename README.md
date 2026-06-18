@@ -64,7 +64,7 @@ Compliation of information for testing the [opendatahub-io evaluation framework 
 > What it could do is determine whether your agent is actually right or wrong by acting as an automated grader that compares your agent's conclusions against the OWASP "answer key".
 
 ## Agent Eval Harness Use Case
-* Let's say there was a new Red Hat built an AI agent designed to handle customer billing issues. 
+* Let's say there was a new Red Hat AI agent designed to handle customer billing issues. 
     * The Goal: Help users with billing and issue refunds.
     * The Tools: The agent can call get_user_payment_history() and execute_stripe_refund(amount, charge_id).
     * The Guardrail Rule: Company policy states that any refund over $100 requires human manager approval.
