@@ -28,6 +28,9 @@ Compliation of information for testing the [opendatahub-io evaluation framework 
         * It applies advanced scoring math. It doesn't just look for exact text matches; it uses regex, log-likelihood (how confident the model was), or even "LLM-as-a-Judge" to score the answer.
 * Testing 
     * In traditional software engineering, we test by feeding a function a known input, and writing an assertion statement checking if the output matches an exact expected value. With AI Agents and LLMs, testing is much harder since their output is non-deterministic and open-ended.
+* Skills
+    * A self-contained unit of capability: a combination of instructions (typically in a SKILL.md file), scripts, and resources that an AI agent can discover and execute to perform a specific task.
+    > Think of it as a modular plugin for an AI agent's toolbox.
 * agent-eval-harness
     * Since running an evaluation framework locally can heavily lag your machine or require massive GPU power, agent-eval-harness acts like a manager. It takes a request from a user, spins up a temporary container in the cloud, drops an evaluation framework (like LightEval) into that container, lets it run the test, grabs the final report, and shuts the container down.
 > *This project is a Continuous Integration (CI) and automated testing framework specifically built for AI agents and LLM skills. Instead of checking for exact string matches, it runs the AI agent in an isolated sandbox, collects what the agent produced, and uses a mix of deterministic code and LLM sub-agents ("LLM-as-a-judge") to evaluate and grade the quality, safety, and efficiency of the agent's work.*
